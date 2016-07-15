@@ -1,20 +1,7 @@
 #!/usr/local/bin/python
 # -*- coding: utf-8 -*-
 
-# import urllib2
-# import urllib
-# import json
-# import pprint
-# 
-# # Put the details of the dataset we're going to create into a dict.
-# dataset_dict = {
-#     'name': 'flattened-crash-data-2010-2015',
-#     'notes': 'Flattened Crash Data 2010-2015',
-# }
-# 
-# # Use the json module to dump the dictionary to a string for posting.
-# data_string = urllib.quote(json.dumps(dataset_dict))
-# 
+
 # # We'll use the package_create function to create a new dataset.
 # request = urllib2.Request(
 #     'http://www.my_ckan_site.com/api/action/package_create')
@@ -24,17 +11,7 @@
 # # that you're creating the dataset on.
 # request.add_header('Authorization', 'a059851e-dea1-4638-aeb4-1c4a7d789fa5')
 # 
-# # Make the HTTP request.
-# response = urllib2.urlopen(request, data_string)
-# assert response.code == 200
-# 
-# # Use the json module to load CKAN's response into a dictionary.
-# response_dict = json.loads(response.read())
-# assert response_dict['success'] is True
-# 
-# # package_create returns the created package as its result.
-# created_package = response_dict['result']
-# pprint.pprint(created_package)
+
 
 import argparse
 import requests
@@ -44,9 +21,10 @@ import re
 import sys
 import time
 
+from urlparse import urlparse
 from cli_utils import url_exists, prompt
 
-
+import ckanapi
 
 
 class Ckan_Util:
@@ -57,16 +35,25 @@ class Ckan_Util:
 
     def fileUpload(self, dataset_name, filepath):
         print('fileUpload --> '+dataset_name+' :: '+filepath)
-        
-        r = requests.post(self.server + '/api/action/resource_create',
-                  data={"package_id":dataset_name},
-                  headers={"X-CKAN-API-Key": self.api_key},
-                  files=[('upload', file(filepath))])
-        if r.status_code == requests.codes.ok:
-            print "success!"
-            print r.text
-        else:
-            print(str(r.status_code)+' '+r.text)
+
+        mysite = ckanapi.RemoteCKAN(self.server,
+            apikey=self.api_key,
+            user_agent='CKAN SHP Uploader')
+        try:
+            pkg = mysite.action.package_create(
+                name=dataset_name,
+                title='not going to work',
+                owner_org='vta')
+        except ckanapi.NotAuthorized:
+            print 'access denied. Is your API key valid?'
+            return
+
+        mysite.action.resource_create(
+            package_id=dataset_name,
+            upload=open(filepath, 'rb'),
+            url='',
+            format='csv')
+
 
 
 
@@ -129,6 +116,11 @@ def valid_api_key(arg):
         return arg
     raise argparse.ArgumentTypeError("{0} is not a valid API key".format(arg))
 
+def valid_file(fname):
+    if os.path.isfile(fname):
+        return fname
+    raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(arg))
+
 if __name__ == '__main__':
     u = Uploader()
 
@@ -137,24 +129,22 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers(description='available subcommands')
 
     parser_main = subparsers.add_parser('direct', help='provide input as positional arguments')
-    parser_main.add_argument('url', metavar='url', type=str, help='the full URL of the CKAN server')
+    parser_main.add_argument('url', metavar='url', type=url_exists, help='the full URL of the CKAN server')
     parser_main.add_argument('key', metavar='key', type=valid_api_key, help='the API key to use for interacting with the API (this key can be found in your user profile in CKAN)')
     parser_main.add_argument('name', metavar='name', type=str, help='the name of the dataset you want to create')
-    parser_main.add_argument('filename', metavar='filename', type=argparse.FileType('r'), help='the path of the file to upload')
+    parser_main.add_argument('filename', metavar='filename', type=valid_file, help='the path of the file to upload')
     
     parser_interactive = subparsers.add_parser('interactive', help='enter interactive mode to be prompted for input')
     
     args = parser.parse_args()
-
-    
-    print type(args)
-    print dir(args)
 
     print (args.url)
     print (args.key)
     print (args.name)
     print (args.filename)
 
+    ckan = Ckan_Util(args.url, args.key)
+    ckan.fileUpload(args.name, args.filename)
 
     # u = Uploader()
     # u.prompt_args()
