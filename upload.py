@@ -103,10 +103,10 @@ def url_exists(url):
     try:
         urllib.request.urlopen(url)
         return url         # URL Exist
-    except ValueError as ex:
+    except ValueError:
         # URL not well formatted
         argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
-    except URLError as ex:
+    except URLError:
         # URL don't seem to be alive
         argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
 
