@@ -1,13 +1,16 @@
 #!/usr/local/bin/python
 # -*- coding: utf-8 -*-
 
-import urllib2
-from urlparse import urlparse
+import sys
+import time
+import urllib.request
+from urllib.error import URLError
+from urllib.parse import urlparse
 
-try:
-    input = raw_input
-except NameError:
-    pass
+#try:
+#    input = raw_input
+#except NameError:
+#    pass
 
 
 
@@ -29,7 +32,7 @@ def waiter():
         time.sleep(0.1)
         spinner_i = (spinner_i + 1) % len(spinner)
         sys.stdout.flush()
-    print 'Done!                           '
+    print('Done!                           ')
 
 
 def url_exists(url):
@@ -37,11 +40,11 @@ def url_exists(url):
     if not bool(parsed_url.scheme):
         return False
     try:
-        urllib2.urlopen(url)
+        urllib.request.urlopen(url)
         return True         # URL Exist
-    except ValueError, ex:
+    except ValueError as ex:
         return False        # URL not well formatted
-    except urllib2.URLError, ex:
+    except URLError as ex:
         return False        # URL don't seem to be alive
 
 
@@ -61,6 +64,6 @@ def prompt(message, errormessage, isvalid):
     while res is None:
         res = input(HEADER+str(message)+': ' +ENDC)
         if not isvalid(res):
-            print  WARNING +str(errormessage)+ENDC
+            print(WARNING +str(errormessage)+ENDC)
             res = None
     return res

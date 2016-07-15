@@ -16,45 +16,46 @@
 import argparse
 import requests
 import os.path
-import urllib2
+import urllib.request
 import re
 import sys
 import time
 
-from urlparse import urlparse
+from urllib.parse import urlparse
+from urllib.error import URLError
 from cli_utils import url_exists, prompt
 
 import ckanapi
 
 
-class Ckan_Util:
+class CkanUtil:
 
     def __init__(self, ckan_server, api_key):
         self.server = ckan_server
         self.api_key = api_key
-
-    def fileUpload(self, dataset_name, filepath):
-        print('fileUpload --> '+dataset_name+' :: '+filepath)
-
-        mysite = ckanapi.RemoteCKAN(self.server,
+        self.ckan_inst = ckanapi.RemoteCKAN(
+            self.server,
             apikey=self.api_key,
-            user_agent='CKAN SHP Uploader')
+            user_agent='CKAN SHP Uploader'
+        )
+
+    def fileUpload(self, dataset_name, dataset_title, filepath):
+        print('fileUpload --> '+dataset_name+' :: '+filepath)
         try:
-            pkg = mysite.action.package_create(
+            pkg = self.ckan_inst.action.package_create(
                 name=dataset_name,
-                title='not going to work',
+                title=dataset_title,
                 owner_org='vta')
-        except ckanapi.NotAuthorized:
-            print 'access denied. Is your API key valid?'
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(ex)
             return
 
-        mysite.action.resource_create(
+        self.ckan_inst.action.resource_create(
             package_id=dataset_name,
             upload=open(filepath, 'rb'),
             url='',
             format='csv')
-
-
 
 
 class Uploader:
@@ -87,10 +88,8 @@ class Uploader:
             isvalid = lambda v : len(v) > 0)
 
 
-
-
     def upload(self):
-        ckan = Ckan_Util(self.server_url, self.api_key)
+        ckan = CkanUtil(self.server_url, self.api_key)
         ckan.fileUpload(self.dataset_name, self.filename)
 
     def to_string(self):
@@ -102,27 +101,30 @@ def url_exists(url):
     if not bool(parsed_url.scheme):
         argparse.ArgumentTypeError("{0} is not a valid URL".format(url))
     try:
-        urllib2.urlopen(url)
+        urllib.request.urlopen(url)
         return url         # URL Exist
-    except ValueError, ex:
+    except ValueError:
         # URL not well formatted
         argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
-    except urllib2.URLError, ex:
+    except URLError:
         # URL don't seem to be alive
         argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
+
 
 def valid_api_key(arg):
     if re.search(r"(([^-])+-){4}[^-]+", arg):
         return arg
     raise argparse.ArgumentTypeError("{0} is not a valid API key".format(arg))
 
+
 def valid_file(fname):
     if os.path.isfile(fname):
         return fname
-    raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(arg))
+    raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(fname))
+
 
 if __name__ == '__main__':
-    u = Uploader()
+    uploader = Uploader()
 
     # http://stackoverflow.com/a/7856172/940217
     parser = argparse.ArgumentParser(description='Upload files to CKAN')
@@ -130,21 +132,22 @@ if __name__ == '__main__':
 
     parser_main = subparsers.add_parser('direct', help='provide input as positional arguments')
     parser_main.add_argument('url', metavar='url', type=url_exists, help='the full URL of the CKAN server')
-    parser_main.add_argument('key', metavar='key', type=valid_api_key, help='the API key to use for interacting with the API (this key can be found in your user profile in CKAN)')
+    parser_main.add_argument('key', metavar='key', type=valid_api_key,
+                             help=('the API key to use for interacting with the API '
+                                   '(this key can be found in your user profile in CKAN)'))
     parser_main.add_argument('name', metavar='name', type=str, help='the name of the dataset you want to create')
+    parser_main.add_argument('title', metavar='title', type=str, help='Title to display for the dataset')
     parser_main.add_argument('filename', metavar='filename', type=valid_file, help='the path of the file to upload')
     
     parser_interactive = subparsers.add_parser('interactive', help='enter interactive mode to be prompted for input')
     
     args = parser.parse_args()
 
-    print (args.url)
-    print (args.key)
-    print (args.name)
-    print (args.filename)
-
-    ckan = Ckan_Util(args.url, args.key)
-    ckan.fileUpload(args.name, args.filename)
+    ckan_util = CkanUtil(ckan_server=args.url,
+                         api_key=args.key)
+    ckan_util.fileUpload(dataset_name=args.name,
+                         dataset_title=args.title,
+                         filepath=args.filename)
 
     # u = Uploader()
     # u.prompt_args()
