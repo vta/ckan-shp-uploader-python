@@ -16,12 +16,13 @@
 import argparse
 import requests
 import os.path
-import urllib2
+import urllib.request
 import re
 import sys
 import time
 
-from urlparse import urlparse
+from urllib.parse import urlparse
+from urllib.error import URLError
 from cli_utils import url_exists, prompt
 
 import ckanapi
@@ -32,23 +33,26 @@ class Ckan_Util:
     def __init__(self, ckan_server, api_key):
         self.server = ckan_server
         self.api_key = api_key
+        self.ckan_inst = ckanapi.RemoteCKAN(
+            self.server,
+            apikey=self.api_key,
+            user_agent='CKAN SHP Uploader'
+        )
 
     def fileUpload(self, dataset_name, filepath):
         print('fileUpload --> '+dataset_name+' :: '+filepath)
 
-        mysite = ckanapi.RemoteCKAN(self.server,
-            apikey=self.api_key,
-            user_agent='CKAN SHP Uploader')
         try:
-            pkg = mysite.action.package_create(
+            pkg = self.ckan_inst.action.package_create(
                 name=dataset_name,
-                title='not going to work',
+                title=dataset_name,
                 owner_org='vta')
-        except ckanapi.NotAuthorized:
-            print 'access denied. Is your API key valid?'
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(ex)
             return
 
-        mysite.action.resource_create(
+        self.ckan_inst.action.resource_create(
             package_id=dataset_name,
             upload=open(filepath, 'rb'),
             url='',
@@ -102,24 +106,27 @@ def url_exists(url):
     if not bool(parsed_url.scheme):
         argparse.ArgumentTypeError("{0} is not a valid URL".format(url))
     try:
-        urllib2.urlopen(url)
+        urllib.request.urlopen(url)
         return url         # URL Exist
-    except ValueError, ex:
+    except ValueError as ex:
         # URL not well formatted
         argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
-    except urllib2.URLError, ex:
+    except URLError as ex:
         # URL don't seem to be alive
         argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
+
 
 def valid_api_key(arg):
     if re.search(r"(([^-])+-){4}[^-]+", arg):
         return arg
     raise argparse.ArgumentTypeError("{0} is not a valid API key".format(arg))
 
+
 def valid_file(fname):
     if os.path.isfile(fname):
         return fname
-    raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(arg))
+    raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(fname))
+
 
 if __name__ == '__main__':
     u = Uploader()
@@ -138,10 +145,10 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
 
-    print (args.url)
-    print (args.key)
-    print (args.name)
-    print (args.filename)
+    print(args.url)
+    print(args.key)
+    print(args.name)
+    print(args.filename)
 
     ckan = Ckan_Util(args.url, args.key)
     ckan.fileUpload(args.name, args.filename)
