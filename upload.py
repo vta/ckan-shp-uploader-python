@@ -18,6 +18,9 @@ import requests
 import os.path
 import urllib.request
 import re
+import json
+import fiona
+import tempfile
 import sys
 import time
 
@@ -123,6 +126,36 @@ def valid_file(fname):
     raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(fname))
 
 
+def shapefile_to_geojson(infile, tempdir=None):
+    """
+    Take an ESRI shapefile as input, and hopefully turn it into a GeoJSON.
+
+    :return:
+    """
+
+    with fiona.open(infile, 'r') as shapefile:
+        source_crs = shapefile.crs
+        source_schema = shapefile.schema
+
+        # Open the writable outfile
+        filename = os.path.splitext(os.path.basename(infile))[0]
+        outfilepath = os.path.join(tempdir, filename)
+        features = [feature for feature in shapefile]
+        crs = " ".join("+%s=%s" % (k,v) for k,v in shapefile.crs.items())
+
+        outfile_layer = {
+        "type": "FeatureCollection",
+        "features": features,
+        "crs": {
+            "type": "link",
+            "properties": {"href": "my_layer.crs", "type": "proj4"} }
+        }
+
+        with open("{}.json".format(outfilepath), "w") as f:
+            f.write(json.dumps(outfile_layer))
+        with open("{}.crs".format(outfilepath), "w") as f:
+            f.write(crs)
+
 if __name__ == '__main__':
     uploader = Uploader()
 
@@ -138,6 +171,8 @@ if __name__ == '__main__':
     parser_main.add_argument('name', metavar='name', type=str, help='the name of the dataset you want to create')
     parser_main.add_argument('title', metavar='title', type=str, help='Title to display for the dataset')
     parser_main.add_argument('filename', metavar='filename', type=valid_file, help='the path of the file to upload')
+    parser_main.add_argument('--shapefile', action='store_true', default=False,
+                             help='Is file a shapefile that needs geoJSON conversion')
     
     parser_interactive = subparsers.add_parser('interactive', help='enter interactive mode to be prompted for input')
     
