@@ -14,15 +14,11 @@
 
 
 import argparse
-import requests
 import os.path
 import urllib.request
 import re
 import json
 import fiona
-import tempfile
-import sys
-import time
 
 from urllib.parse import urlparse
 from urllib.error import URLError
