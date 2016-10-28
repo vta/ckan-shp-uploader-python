@@ -106,7 +106,7 @@ class Uploader:
             print(ex)
         except ckanapi.NotAuthorized as ex:
             print('access denied. Is your API key valid?')
-            print(ex)
+            print(repr(ex))
             raise
 
     def ckan_purge_dataset(self, dataset_id):
@@ -120,7 +120,7 @@ class Uploader:
             print(ex)
         except ckanapi.NotAuthorized as ex:
             print('access denied. Is your API key valid?')
-            print(ex)
+            print(repr(ex))
             raise
 
     def ckan_update_resource(

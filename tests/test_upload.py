@@ -6,6 +6,7 @@ import tempfile
 
 from unittest import mock
 from urllib.error import URLError
+from ckanapi import NotAuthorized
 
 def test_valid_api_key():
     good_api_key = '11111111-1111-1111-1111-111111111111'
@@ -50,3 +51,29 @@ def test_url_exists():
         url_patch.side_effect = URLError(reason='because')
         with pytest.raises(argparse.ArgumentTypeError):
             upload.url_exists(url='https://www.google.com')
+
+
+def test_uploader_delete(monkeypatch):
+
+    uploader = upload.Uploader()
+    fake_ckan_inst = mock.MagicMock()
+    monkeypatch.setattr(uploader, 'ckan_inst', fake_ckan_inst)
+    uploader.ckan_delete_dataset(dataset_id=1)
+
+    fake_ckan_inst.action.package_delete.side_effect = NotAuthorized
+    monkeypatch.setattr(uploader, 'ckan_inst', fake_ckan_inst)
+    with pytest.raises(NotAuthorized):
+        uploader.ckan_delete_dataset(dataset_id=1)
+
+
+def test_uploader_purge(monkeypatch):
+
+    uploader = upload.Uploader()
+    fake_ckan_inst = mock.MagicMock()
+    monkeypatch.setattr(uploader, 'ckan_inst', fake_ckan_inst)
+    uploader.ckan_purge_dataset(dataset_id=1)
+
+    fake_ckan_inst.call_action.side_effect = NotAuthorized
+    monkeypatch.setattr(uploader, 'ckan_inst', fake_ckan_inst)
+    with pytest.raises(NotAuthorized):
+        uploader.ckan_purge_dataset(dataset_id=1)
