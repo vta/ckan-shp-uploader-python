@@ -22,6 +22,7 @@ import fiona
 import sys
 import time
 import threading
+import itertools
 
 from urllib.parse import urlparse
 from urllib.error import URLError
@@ -137,7 +138,8 @@ class Uploader:
         solr_query = 'title:{0} AND organization:{1}'.format(dataset_title, owner_org)
         res = self.ckan_inst.action.package_search(q=solr_query)
         if res.get('count') is not 1:
-            print('could not find the requested dataset; dataset title and organization not specific enough')
+            print('could not find the requested dataset; '
+                  'dataset title and organization not specific enough')
             return
 
         # would something like this work instead?
@@ -254,10 +256,14 @@ def check_preview_file(filename):
     # preview what we're going to upload
     if os.path.isfile(filename):
         with open(filename) as f:
-            head = [next(f) for x in iter(range(5))]
+            # Using islice becuase it doesn't fail if the file
+            # is too short.
+            head = list(itertools.islice(f, 5))
         print(head)
     else:
-        raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(fname))
+        raise argparse.ArgumentTypeError(
+            "{0} is not a valid filepath".format(filename)
+        )
 
 def shapefile_to_geojson(infile, tempdir=None):
     """
