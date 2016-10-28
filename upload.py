@@ -239,10 +239,12 @@ def url_exists(url):
         return url         # URL Exist
     except ValueError:
         # URL not well formatted
-        argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
+        raise argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
     except URLError:
         # URL don't seem to be alive
-        argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
+        raise argparse.ArgumentTypeError(
+            "could not connect to the server at {0}".format(url)
+        )
 
 
 def valid_api_key(arg):
@@ -309,7 +311,7 @@ if __name__ == '__main__':
                                    '(this key can be found in your user profile in CKAN)'))
     parser_main.add_argument('name', metavar='name', type=str, help='the name of the dataset you want to create')
     parser_main.add_argument('title', metavar='title', type=str, help='Title to display for the dataset')
-    parser_main.add_argument('filename', metavar='filename', type=valid_file, help='the path of the file to upload')
+    parser_main.add_argument('filename', metavar='filename', type=str, help='the path of the file to upload')
     parser_main.add_argument('--shapefile', action='store_true', default=False,
                              help='Is file a shapefile that needs geoJSON conversion')
     
