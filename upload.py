@@ -27,6 +27,8 @@ from urllib.parse import urlparse
 from urllib.error import URLError
 from cli_utils import url_exists, prompt
 
+API_KEY_IS_VALID = re.compile(r"(([^-])+-){4}[^-]+")
+
 import ckanapi
 
 
@@ -36,7 +38,6 @@ def run_long_process(function_name, *args, **kwargs):
     t1.start()
     spinner = ['-','\\','|','/','-','\\','|','/']
     spinner_i = 0
-    progress = 0
     delta_t = 0
     while t1.is_alive():
         delta_t = (time.time() - start_t)
@@ -49,7 +50,9 @@ def run_long_process(function_name, *args, **kwargs):
     print('Done!                           ')
     print('Finished in {0:.2f} seconds'.format(delta_t))
 
+
 class Uploader:
+
     def __init__(self):
         self.server_url = None
         self.api_key = None
@@ -62,12 +65,12 @@ class Uploader:
         self.server_url = prompt(
             message = "Enter the URL of the CKAN server", 
             errormessage= "The URL you provides is not valid (it must be the full URL)",
-            isvalid = lambda v : url_exists(v))
+            isvalid = lambda v: url_exists(v))
 
         self.api_key = prompt(
             message = "Enter the API key to use for uploading", 
             errormessage= "A valid API key must be provided. This key can be found in your user profile in CKAN",
-            isvalid = lambda v : re.search(r"(([^-])+-){4}[^-]+", v))
+            isvalid = lambda v : API_KEY_IS_VALID.search(v))
 
         self.filename = prompt(
             message = "Enter the path of the file to upload", 
@@ -78,7 +81,6 @@ class Uploader:
             message = "Enter the name of the dataset you want to create", 
             errormessage= "The dataset must be named",
             isvalid = lambda v : len(v) > 0)
-
 
     def upload(self):
         self.ckan_inst = ckanapi.RemoteCKAN(
@@ -104,7 +106,7 @@ class Uploader:
         except ckanapi.NotAuthorized as ex:
             print('access denied. Is your API key valid?')
             print(ex)
-            return
+            raise
 
     def ckan_purge_dataset(self, dataset_id):
         """
@@ -118,7 +120,7 @@ class Uploader:
         except ckanapi.NotAuthorized as ex:
             print('access denied. Is your API key valid?')
             print(ex)
-            return
+            raise
 
     def ckan_update_resource(
         self, dataset_title, filepath, owner_org='vta',
@@ -171,7 +173,7 @@ class Uploader:
         except ckanapi.NotAuthorized as ex:
             print('access denied. Is your API key valid?')
             print(ex)
-            return
+            raise
         print('done')
 
     def ckan_add_resource_to_dataset(
@@ -241,11 +243,8 @@ def url_exists(url):
         argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
 
 
-
-
-
 def valid_api_key(arg):
-    if re.search(r"(([^-])+-){4}[^-]+", arg):
+    if API_KEY_IS_VALID.search(arg):
         return arg
     raise argparse.ArgumentTypeError("{0} is not a valid API key".format(arg))
 

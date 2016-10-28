@@ -9,8 +9,3 @@ def test_valid_api_key():
 
     with pytest.raises(argparse.ArgumentTypeError):
         upload.valid_api_key(arg='thisshouldbeugly')
-
-
-def test_valid_file():
-    with tempfile.TemporaryFile() as t_file:
-        assert upload.valid_file(fname=t_file.name) == t_file.name
