@@ -1,3 +1,5 @@
+[![Stories in Ready](https://badge.waffle.io/vta/ckan-shp-uploader-python.png?label=ready&title=Ready)](https://waffle.io/vta/ckan-shp-uploader-python)
+
 # CKAN Uploader for Shapefiles
 (uses Python 3)
 
