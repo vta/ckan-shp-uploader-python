@@ -1,4 +1,5 @@
 ckanapi==3.5
 docopt==0.6.2
+fiona
 requests==2.10.0
 simplejson==3.8.2

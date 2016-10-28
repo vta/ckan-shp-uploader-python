@@ -22,151 +22,23 @@ import fiona
 import sys
 import time
 import threading
+import itertools
 
 from urllib.parse import urlparse
 from urllib.error import URLError
 from cli_utils import url_exists, prompt
 
+API_KEY_IS_VALID = re.compile(r"(([^-])+-){4}[^-]+")
+
 import ckanapi
 
 
-
-
-
-def ckan_create_dataset(dataset_name, dataset_title, owner_org='vta'):
-    """
-    Create a dataset without an associated resource
-    """
-    try:
-        ckan_inst.action.package_create(
-                name=dataset_name,
-                title=dataset_title,
-                owner_org=owner_org)
-    except ckanapi.ValidationError as ex:
-        if e.error_dict.get('name') ==  ['That URL is already in use.']:
-            print('Package already exists')
-        else:
-            raise
-    except ckanapi.NotAuthorized as ex:
-        print('access denied. Is your API key valid?')
-        print(ex)
-        return
-    print('done')
-
-def ckan_add_resource_to_dataset(package_id, filepath, name=None, url='dummy-value', data_format='csv'):
-    """
-    Upload a new resource and associate it with a dataset
-    """
-    print('adding resource to dataset --> '+package_id+' :: '+filepath)
-    if name is None:
-        name = os.path.basename(filepath)
-    try:
-        print('uploading...')
-        res = ckan_inst.action.resource_create(
-            package_id=package_id,
-            name=name,
-            upload=open(filepath, 'rb'),
-            url=url,
-            format=data_format)
-        print('done')
-        return res
-    except ckanapi.ValidationError as ex:
-        print(ex)
-    except ckanapi.NotAuthorized as ex:
-        print('access denied. Is your API key valid?')
-        print(ex)
-        return
-    print('done')
-
-    
-def ckan_update_resource(dataset_title, filepath, owner_org='vta', name=None, url='dummy-value', data_format='csv'):
-    """
-    For this to work, the resource names should be unique (this is not enforced).
-    If the names are not unique, only the last one with the same name will be updated.
-    
-    http://docs.ckan.org/en/latest/api/index.html#ckan.logic.action.update.resource_update
-    """
-    # run a SOLR search for the package
-    # http://data2.vta.org/api/3/action/package_search?q=&fq=title:ins_sample%20AND%20organization:city-of-san-jose
-    solr_query = 'title:{0} AND organization:{1}'.format(dataset_title, owner_org)
-    res = ckan_inst.action.package_search(q=solr_query)
-    if res.get('count') is not 1:
-        print('could not find the requested dataset; dataset title and organization not specific enough')
-        return
-    
-    # would something like this work instead?
-    # res = ckan_inst.action.package_show(id=dataset_title)
-
-    print('looking for file "{0}" inside the "{1}" dataset'.format( name, dataset_title))
-    resource_id = None
-    for r in res.get('results')[0].get('resources'):
-        print (str(r.get('name'))+' : '+str(r.get('id')))
-        if str(r.get('name')) == str(name):
-            resource_id = r.get('id')
-    
-    if resource_id is None:
-        print('could not find the requested resource')
-        return
-    else:
-        print('found resource id "{0}"'.format(resource_id))
-    
-    print('uploading...')
-    try:
-        res = ckan_inst.action.resource_update(
-            id=resource_id,
-            name=name,
-            upload=open(filepath, 'rb'),
-            url=url,
-            format=data_format)
-        print('done')
-        return res
-    except ckanapi.ValidationError as ex:
-        print(ex)
-    except ckanapi.NotAuthorized as ex:
-        print('access denied. Is your API key valid?')
-        print(ex)
-        return
-    print('done')
-
-
-    
-def ckan_purge_dataset(dataset_id):
-    """
-    WARNING: cannot be undone
-    This frees up the URL of the resource
-    """
-    try:
-        ckan_inst.call_action('dataset_purge', {'id': dataset_id})
-    except ckanapi.ValidationError as ex:
-        print(ex)
-    except ckanapi.NotAuthorized as ex:
-        print('access denied. Is your API key valid?')
-        print(ex)
-        return
-
-    
-def ckan_delete_dataset(dataset_id):
-    """
-    Delete a dataset
-    """
-    try:
-        ckan_inst.action.package_delete(id=dataset_id)
-    except ckanapi.ValidationError as ex:
-        print(ex)
-    except ckanapi.NotAuthorized as ex:
-        print('access denied. Is your API key valid?')
-        print(ex)
-        return
-
-
-
-def run_long_process(function_name, args):
-    t1 = threading.Thread(target=function_name, args=args)
+def run_long_process(function_name, *args, **kwargs):
+    t1 = threading.Thread(target=function_name, args=args, kwargs=kwargs)
     start_t = time.time()
     t1.start()
     spinner = ['-','\\','|','/','-','\\','|','/']
     spinner_i = 0
-    progress = 0
     delta_t = 0
     while t1.is_alive():
         delta_t = (time.time() - start_t)
@@ -179,24 +51,27 @@ def run_long_process(function_name, args):
     print('Done!                           ')
     print('Finished in {0:.2f} seconds'.format(delta_t))
 
+
 class Uploader:
+
     def __init__(self):
         self.server_url = None
         self.api_key = None
         self.dataset_name = None
         self.filename = None
+        self.ckan_inst = None
 
     def prompt_args(self):
         
         self.server_url = prompt(
             message = "Enter the URL of the CKAN server", 
             errormessage= "The URL you provides is not valid (it must be the full URL)",
-            isvalid = lambda v : url_exists(v))
+            isvalid = lambda v: url_exists(v))
 
         self.api_key = prompt(
             message = "Enter the API key to use for uploading", 
             errormessage= "A valid API key must be provided. This key can be found in your user profile in CKAN",
-            isvalid = lambda v : re.search(r"(([^-])+-){4}[^-]+", v))
+            isvalid = lambda v : API_KEY_IS_VALID.search(v))
 
         self.filename = prompt(
             message = "Enter the path of the file to upload", 
@@ -208,15 +83,148 @@ class Uploader:
             errormessage= "The dataset must be named",
             isvalid = lambda v : len(v) > 0)
 
-
     def upload(self):
-        ckan_inst = ckanapi.RemoteCKAN(
+        self.ckan_inst = ckanapi.RemoteCKAN(
             self.server_url,
             apikey=self.api_key,
             user_agent='CKAN SHP Uploader'
         )
-        run_long_process(ckan_add_resource_to_dataset, [self.dataset_name, self.filename, name=os.path.basename(self.filename)])
+        run_long_process(
+            self.ckan_add_resource_to_dataset,
+            self.dataset_name,
+            self.filename,
+            name=os.path.basename(self.filename),
+        )
 
+    def ckan_delete_dataset(self, dataset_id):
+        """
+        Delete a dataset
+        """
+        try:
+            self.ckan_inst.action.package_delete(id=dataset_id)
+        except ckanapi.ValidationError as ex:
+            print(ex)
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(repr(ex))
+            raise
+
+    def ckan_purge_dataset(self, dataset_id):
+        """
+        WARNING: cannot be undone
+        This frees up the URL of the resource
+        """
+        try:
+            self.ckan_inst.call_action('dataset_purge', {'id': dataset_id})
+        except ckanapi.ValidationError as ex:
+            print(ex)
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(repr(ex))
+            raise
+
+    def ckan_update_resource(
+        self, dataset_title, filepath, owner_org='vta',
+        name=None, url='dummy-value', data_format='csv'
+):
+        """
+        For this to work, the resource names should be unique (this is not enforced).
+        If the names are not unique, only the last one with the same name will be updated.
+
+        http://docs.ckan.org/en/latest/api/index.html#ckan.logic.action.update.resource_update
+        """
+        # run a SOLR search for the package
+        # http://data2.vta.org/api/3/action/package_search?q=&fq=title:ins_sample%20AND%20organization:city-of-san-jose
+        solr_query = 'title:{0} AND organization:{1}'.format(dataset_title, owner_org)
+        res = self.ckan_inst.action.package_search(q=solr_query)
+        if res.get('count') is not 1:
+            print('could not find the requested dataset; '
+                  'dataset title and organization not specific enough')
+            return
+
+        # would something like this work instead?
+        # res = self.ckan_inst.action.package_show(id=dataset_title)
+
+        print('looking for file "{0}" inside the "{1}" dataset'.format(
+            name, dataset_title
+        ))
+        resource_id = None
+        for r in res.get('results')[0].get('resources'):
+            print (str(r.get('name'))+' : '+str(r.get('id')))
+            if str(r.get('name')) == str(name):
+                resource_id = r.get('id')
+
+        if resource_id is None:
+            print('could not find the requested resource')
+            return
+        else:
+            print('found resource id "{0}"'.format(resource_id))
+
+        print('uploading...')
+        try:
+            res = self.ckan_inst.action.resource_update(
+                id=resource_id,
+                name=name,
+                upload=open(filepath, 'rb'),
+                url=url,
+                format=data_format)
+            print('done')
+            return res
+        except ckanapi.ValidationError as ex:
+            print(ex)
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(ex)
+            raise
+        print('done')
+
+    def ckan_add_resource_to_dataset(
+            self, package_id, filepath, name=None,
+            url='dummy-value', data_format='csv'):
+        """
+        Upload a new resource and associate it with a dataset
+        """
+        print('adding resource to dataset --> '+package_id+' :: '+filepath)
+        name = name or os.path.basename(filepath)
+        try:
+            print('uploading...')
+            res = self.ckan_inst.action.resource_create(
+                package_id=package_id,
+                name=name,
+                upload=open(filepath, 'rb'),
+                url=url,
+                format=data_format)
+            print('done')
+            return res
+        except ckanapi.ValidationError as ex:
+            print(ex)
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(ex)
+            return
+        print('done')
+
+    def ckan_create_dataset(self, dataset_name,
+                            dataset_title, owner_org='vta'):
+        """
+        Create a dataset without an associated resource
+        """
+        try:
+            self.ckan_inst.action.package_create(
+                name=dataset_name,
+                title=dataset_title,
+                owner_org=owner_org
+            )
+        except ckanapi.ValidationError as ex:
+            if ex.error_dict.get('name') ==  ['That URL is already in use.']:
+                print('Package already exists')
+            else:
+                raise
+        except ckanapi.NotAuthorized as ex:
+            print('access denied. Is your API key valid?')
+            print(ex)
+            return
+        print('done')
 
     def to_string(self):
         return self.server_url +' '+ self.api_key +' '+ self.dataset_name +' '+ self.filename
@@ -231,14 +239,16 @@ def url_exists(url):
         return url         # URL Exist
     except ValueError:
         # URL not well formatted
-        argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
+        raise argparse.ArgumentTypeError("{0}  is not a valid URL".format(url))
     except URLError:
         # URL don't seem to be alive
-        argparse.ArgumentTypeError("could not connect to the server at {0}".format(url))
+        raise argparse.ArgumentTypeError(
+            "could not connect to the server at {0}".format(url)
+        )
 
 
 def valid_api_key(arg):
-    if re.search(r"(([^-])+-){4}[^-]+", arg):
+    if API_KEY_IS_VALID.search(arg):
         return arg
     raise argparse.ArgumentTypeError("{0} is not a valid API key".format(arg))
 
@@ -248,10 +258,14 @@ def check_preview_file(filename):
     # preview what we're going to upload
     if os.path.isfile(filename):
         with open(filename) as f:
-            head = [next(f) for x in iter(range(5))]
+            # Using islice becuase it doesn't fail if the file
+            # is too short.
+            head = list(itertools.islice(f, 5))
         print(head)
     else:
-        raise argparse.ArgumentTypeError("{0} is not a valid filepath".format(fname))
+        raise argparse.ArgumentTypeError(
+            "{0} is not a valid filepath".format(filename)
+        )
 
 def shapefile_to_geojson(infile, tempdir=None):
     """
@@ -297,7 +311,7 @@ if __name__ == '__main__':
                                    '(this key can be found in your user profile in CKAN)'))
     parser_main.add_argument('name', metavar='name', type=str, help='the name of the dataset you want to create')
     parser_main.add_argument('title', metavar='title', type=str, help='Title to display for the dataset')
-    parser_main.add_argument('filename', metavar='filename', type=valid_file, help='the path of the file to upload')
+    parser_main.add_argument('filename', metavar='filename', type=str, help='the path of the file to upload')
     parser_main.add_argument('--shapefile', action='store_true', default=False,
                              help='Is file a shapefile that needs geoJSON conversion')
     
