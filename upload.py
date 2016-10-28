@@ -126,7 +126,7 @@ class Uploader:
     def ckan_update_resource(
         self, dataset_title, filepath, owner_org='vta',
         name=None, url='dummy-value', data_format='csv'
-):
+    ):
         """
         For this to work, the resource names should be unique (this is not enforced).
         If the names are not unique, only the last one with the same name will be updated.
@@ -180,7 +180,8 @@ class Uploader:
 
     def ckan_add_resource_to_dataset(
             self, package_id, filepath, name=None,
-            url='dummy-value', data_format='csv'):
+            url='dummy-value', data_format='csv'
+    ):
         """
         Upload a new resource and associate it with a dataset
         """
@@ -204,8 +205,10 @@ class Uploader:
             return
         print('done')
 
-    def ckan_create_dataset(self, dataset_name,
-                            dataset_title, owner_org='vta'):
+    def ckan_create_dataset(
+            self, dataset_name,
+            dataset_title, owner_org='vta'
+    ):
         """
         Create a dataset without an associated resource
         """
@@ -267,6 +270,7 @@ def check_preview_file(filename):
             "{0} is not a valid filepath".format(filename)
         )
 
+
 def shapefile_to_geojson(infile, tempdir=None):
     """
     Take an ESRI shapefile as input, and hopefully turn it into a GeoJSON.
@@ -275,8 +279,6 @@ def shapefile_to_geojson(infile, tempdir=None):
     """
 
     with fiona.open(infile, 'r') as shapefile:
-        source_crs = shapefile.crs
-        source_schema = shapefile.schema
 
         # Open the writable outfile
         filename = os.path.splitext(os.path.basename(infile))[0]
