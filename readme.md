@@ -16,3 +16,4 @@ workflow management or email notification
 usage tracking information
 - downloads, usages per API key?
 
+The goal of this project is to have similar utility to [OpenCouncilData/Ckan-Upload](https://github.com/OpenCouncilData/Ckan-Upload), but more features.
